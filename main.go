@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/xml"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -11,9 +12,13 @@ import (
 	"strings"
 )
 
-const svnInfoXMLToPS1Version string = "0.0.1"
+const svnInfoXMLToPS1Version string = "0.0.2"
 
-var flagVersion bool
+var (
+	flagVersion bool
+	// ErrInvalidInput is returned as error if input is invalid
+	ErrInvalidInput = errors.New("Invalid input?")
+)
 
 type typeXMLInfo struct {
 	URL         string `xml:"entry>repository>root"`
@@ -40,23 +45,18 @@ func parseXMLInfo(content []byte) (string, string) {
 	return res.URL, res.RelativeURL
 }
 
-func init() {
-	flag.BoolVar(&flagVersion, "V", false, "Print version")
-	flag.Parse()
-}
-
-func main() {
-	if flagVersion {
-		fmt.Printf("svn-info-xml-to-ps1 %v\n", svnInfoXMLToPS1Version)
-		return
-	}
-
-	stdin := getStdin()
-	repo, relurl := parseXMLInfo(stdin)
-	name, location := "", ""
-
+func getPS1String(input []byte, cwd string) (string, error) {
+	var (
+		result   []string
+		name     string
+		location string
+	)
+	repo, relurl := parseXMLInfo(input)
 	if repo != "" {
-		if relurl == "^/trunk/" {
+		if !strings.HasSuffix(cwd, "/") {
+			cwd += "/"
+		}
+		if strings.HasPrefix(relurl, "^/trunk/") {
 			location = "trunk"
 		} else {
 			re1, _ := regexp.Compile(`^\^/(branches|tags|releases)/(.*?\/)`)
@@ -66,12 +66,6 @@ func main() {
 				name = strings.Trim(resultSlice[2], "/")
 			}
 		}
-
-		cwd, _ := os.Getwd()
-		cwd, _ = filepath.Abs(cwd)
-		cwd += "/"
-
-		var result []string
 		for _, value := range []string{repo, location, name} {
 			if value != "" {
 				if strings.Index(cwd, "/"+value+"/") == -1 {
@@ -82,7 +76,25 @@ func main() {
 		if len(result) == 0 {
 			result = append(result, repo)
 		}
-		fmt.Println(":" + strings.Join(result, ":"))
+		return ":" + strings.Join(result, ":"), nil
 	}
+	return "", ErrInvalidInput
+}
 
+func init() {
+	flag.BoolVar(&flagVersion, "V", false, "Print version")
+	flag.Parse()
+	if flagVersion {
+		fmt.Printf("svn-info-xml-to-ps1 %v\n", svnInfoXMLToPS1Version)
+		os.Exit(0)
+	}
+}
+
+func main() {
+	cwd, _ := os.Getwd()
+	cwd, _ = filepath.Abs(cwd)
+	result, err := getPS1String(getStdin(), cwd)
+	if err == nil {
+		fmt.Println(result)
+	}
 }
