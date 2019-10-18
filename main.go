@@ -81,16 +81,13 @@ func getPS1String(input []byte, cwd string) (string, error) {
 	return "", ErrInvalidInput
 }
 
-func init() {
+func main() {
 	flag.BoolVar(&flagVersion, "V", false, "Print version")
 	flag.Parse()
 	if flagVersion {
 		fmt.Printf("svn-info-xml-to-ps1 %v\n", svnInfoXMLToPS1Version)
 		os.Exit(0)
 	}
-}
-
-func main() {
 	cwd, _ := os.Getwd()
 	cwd, _ = filepath.Abs(cwd)
 	result, err := getPS1String(getStdin(), cwd)
